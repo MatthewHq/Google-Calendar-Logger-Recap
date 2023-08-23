@@ -21,12 +21,20 @@ Creates calendar events representing a logged activity once setup with iPhone sh
  1. Completed / Changed activity but did not log at prior time end
 
     X===[K1====N]
+    - cachedTime @ N
  2. About to log completed activity but last cached time is too early
 
     [X===K1]======N
- 3. Definite complete range?
+    - cachedTime @ K1
+
+ 3. Normal Log Activity
+    [X============N]
+    - cachedTime @ N
+
+ 4. Definite complete range?
 
     [K1===K2]====X===N
+    - cachedTime @ X (unchanged)
 
 
  Speed

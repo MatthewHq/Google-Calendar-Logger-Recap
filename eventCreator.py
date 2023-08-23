@@ -1,26 +1,161 @@
 from __future__ import print_function
+import json
 import datetime
 import re
 import pickle
 import os.path
+import sys
 from googleapiclient.discovery import build
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
+from datetime import datetime
 
 
-startAddress='Tracker'+os.sep+'start.txt'
-updateAddress='Tracker'+os.sep+'trackerUpdate.txt'
-
+startAddress = 'Tracker'+os.sep+'start.txt'
+updateAddress = 'Tracker'+os.sep+'trackerUpdate.txt'
+dataFilePath = 'Tracker'+os.sep+'cache.json'
 
 
 # If modifying these scopes, delete the file token.pickle.
 SCOPES = ['https://www.googleapis.com/auth/calendar']
 
 
+def registerNextCacheTime(nextTime):
+    # Opening JSON file
+    with open(dataFilePath, 'r') as openfile:
+        # Reading from json file
+        json_object = json.load(openfile)
+    
+        
+    with open(dataFilePath, "w") as outfile:
+            json_object['cachedTime']=nextTime
+            json_object = json.dumps(json_object, indent=4)
+            outfile.write(json_object)
+
+def getNextCacheTime(currentCacheTime):
+    search = re.sub(
+        '((\d*-)(\d*-)(\d*)T(\d*):)(\d*)(:(\d*))', "\g<6>", currentCacheTime)
+    # splitHolder = search.split(', ')
+    # search = splitHolder
+    # search = search[len(search)-1]
+    search = int(search)
+    # print(search)
+    if search != 59:
+        search = search+1
+        # print(search)
+    if (search > 9):
+        searchFormatted = str(search)
+    else:
+        searchFormatted = "0"+str(search)
+    # print(search)
+    addedString = re.sub(
+        '((\d*-)(\d*-)(\d*)T(\d*):)(\d*)(:(\d*))', "\g<1>"+searchFormatted+"\g<7>", currentCacheTime)
+    return addedString
+
+
+def parseArgs(args):
+    # arg example: start-XXXX end-XXXXX title-XXXX descripion-XXXXX
+    inputs = {}
+    # unparsedInputs = inputStr.split(' ')
+    for x in args:
+        y = x.split('=-')
+        inputs[y[0]] = y[1]
+    return inputs
+
+
+def getNowTime():
+    # get current datetime
+    now = datetime.now()
+
+    # Get current ISO 8601 datetime in string format
+    iso_date = now.isoformat()
+    iso_date = iso_date.split('.')[0]
+    print("returning",iso_date)
+    return iso_date
+
+def checkDataFile():
+    if not os.path.isfile('Tracker'+os.sep+'cache.json'):
+
+        now=getNowTime()
+
+        # Data to be written
+        dictionary = {
+            "cachedTime": now
+        }
+
+        # Serializing json
+        json_object = json.dumps(dictionary, indent=4)
+
+        # Writing to sample.json
+        with open(dataFilePath, "w") as outfile:
+            outfile.write(json_object)
+
+
+def determineCache(args):
+    startTime=args.get('startTime')
+    endTime=args.get('endTime')
+    category=args.get('category')
+    summary=args.get('summary')
+
+    if not (startTime and endTime):
+        if endTime:
+            #cachedTime @ endTime
+            registerNextCacheTime(getNextCacheTime(endTime))
+        else:
+            #cachedTime @ Now
+            registerNextCacheTime(getNextCacheTime(getNowTime()))
+
+
+
+def eventContrustor(args):
+    startTime=args.get('startTime')
+    endTime=args.get('endTime')
+    category=args.get('category')
+    summary=args.get('summary')
+    
+    event = {}
+
+    if not startTime:
+
+        # Opening JSON file
+        with open(dataFilePath, 'r') as openfile:
+            # Reading from json file
+            json_object = json.load(openfile)
+            startTime=json_object['cachedTime']
+    
+    if not endTime:
+        # Opening JSON file
+        endTime=getNowTime()
+
+
+    event['summary'] = summary
+
+    event['start'] = {
+        'dateTime': startTime,
+        'timeZone': 'America/Los_Angeles',
+    }
+    event['end'] = {
+        'dateTime': endTime,
+        'timeZone': 'America/Los_Angeles',
+    }
+    if category:
+        event['description'] = category
+    return event
+
+
 def main():
+    checkDataFile()
+    print(sys.argv)
+    args=parseArgs(sys.argv[1:len(sys.argv)])
+    
+    event=eventContrustor(args)
+    determineCache(args)
     """Shows basic usage of the Google Calendar API.
     Prints the start and name of the next 10 events on the user's calendar.
     """
+    
+    print(event)
+    
     creds = None
     # The file token.pickle stores the user's access and refresh tokens, and is
     # created automatically when the authorization flow completes for the first
@@ -50,125 +185,23 @@ def main():
             # print("=======\n"+str(calendar_list_entry)+"=======\n")
             # print(calendar_list_entry['summary'])
             # Call the Calendar API
-            now = datetime.datetime.utcnow().isoformat() + 'Z' # 'Z' indicates UTC time
+            # now = datetime.datetime.utcnow().isoformat() + 'Z'  # 'Z' indicates UTC time
 
             # print(calendar_list_entry['summary'] == "Z LOG")
             if calendar_list_entry['summary'] == "Z LOG":
-                
-                f = open(updateAddress, "r")
-                fread=f.read().replace("  \n","")
-                arguments=fread.split(', ') # dont forget to repladce time format " \n"
-                print(arguments)
-                category=''
-                summary=''
-                if len(arguments)==3:
-                    intent=arguments[0]
-                    summary=arguments[1]
-                    time=str(arguments[2])
-                elif len(arguments)==4:
-                    intent=arguments[0]
-                    summary=arguments[1]
-                    category=arguments[2]
-                    time=str(arguments[3])
-                elif len(arguments)==2:
-                    intent=arguments[0]
-                    time=str(arguments[1])
-                print("\n |"+str(intent)+"| INTENT")
 
-                if str(intent).lower()=="finish":
-                    print("\n FINISHING")
-                    endSummary=''
-                    if summary:
-                        endSummary=summary
+                id = calendar_list_entry['id']
 
-                    startFile = open(startAddress, "r")
-                    startContent=startFile.read()
-                    startArguments=startContent.split(', ') # dont forget to repladce time format " \n"
-                    print(startArguments)
-                    startFile.close()
-                    
+                service.events().insert(calendarId=id, body=event).execute() #used to be event=.... ??
 
-                    
-                    addtime=fread
-                    search=re.sub('((\d*-)(\d*-)(\d*)T(\d*):)(\d*)(:(\d*))', "\g<6>", addtime)
-                    splitHolder=search.split(', ')
-                    search=splitHolder
-                    search=search[len(search)-1]
-                    search=int(search)
-                    print(search)
-                    if search!=59:
-                        search=search+1
-                        print(search)
-                    if (search >9):
-                        searchFormatted=str(search)
-                    else:
-                        searchFormatted="0"+str(search)
-                    print(search)
-                    addedString=re.sub('((\d*-)(\d*-)(\d*)T(\d*):)(\d*)(:(\d*))', "\g<1>"+searchFormatted+"\g<7>", addtime)
-
-                    if not endSummary:
-                        splitHolder[len(splitHolder)-1]=addedString.lower().replace("finish","unknown")
-                        unknownSummary=", ".join(splitHolder)
-                        addedString=unknownSummary
-
-                    fx = open(startAddress, "w")
-                    print(addedString)
-                    fx.write(addedString)
-
-                    
-                    if len(startArguments)==3:
-                        intent=startArguments[0]
-                        summary=startArguments[1]
-                        startTime=str(startArguments[2])
-                    elif len(startArguments)==4:
-                        intent=startArguments[0]
-                        summary=startArguments[1]
-                        if category=='':
-                            category=startArguments[2]
-                        startTime=str(startArguments[3])
-                    elif len(arguments)==2:
-                        intent=arguments[0]
-                        startTime=str(startArguments[1])
-
-                    id=calendar_list_entry['id']
-                    event={}
-                    if endSummary:
-                        event['summary']=endSummary
-                    else:
-                        event['summary']=summary
-                    
-                    event['start']={
-                        'dateTime': startTime,
-                        'timeZone': 'America/Los_Angeles',
-                    }
-                    event['end']={
-                        'dateTime': time,
-                        'timeZone': 'America/Los_Angeles',
-                    }
-                    if category:
-                        event['description']=category
-                    print(str(event)+"AAAA")
-                    event = service.events().insert(calendarId=id, body=event).execute()
-                elif str(intent).lower()=="start":
-                    fx = open(startAddress, "w")
-                    print(fread)
-                    fx.write(fread)
-                
-         
         page_token = calendar_list.get('nextPageToken')
-
-        
-
-            
-
-
 
         if not page_token:
             break
 
 
-    
-
-
 if __name__ == '__main__':
     main()
+
+# print(parseArgs("start-XXXX end-XXXXX title-XXXX descripion-XXXXX"))
+print(getNextCacheTime("2022-12-08T12:39:21"))
