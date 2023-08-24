@@ -25,12 +25,12 @@ def registerNextCacheTime(nextTime):
     with open(dataFilePath, 'r') as openfile:
         # Reading from json file
         json_object = json.load(openfile)
-    
-        
+
     with open(dataFilePath, "w") as outfile:
-            json_object['cachedTime']=nextTime
-            json_object = json.dumps(json_object, indent=4)
-            outfile.write(json_object)
+        json_object['cachedTime'] = nextTime
+        json_object = json.dumps(json_object, indent=4)
+        outfile.write(json_object)
+
 
 def getNextCacheTime(currentCacheTime):
     search = re.sub(
@@ -70,13 +70,14 @@ def getNowTime():
     # Get current ISO 8601 datetime in string format
     iso_date = now.isoformat()
     iso_date = iso_date.split('.')[0]
-    print("returning",iso_date)
+    print("returning", iso_date)
     return iso_date
+
 
 def checkDataFile():
     if not os.path.isfile('Tracker'+os.sep+'cache.json'):
 
-        now=getNowTime()
+        now = getNowTime()
 
         # Data to be written
         dictionary = {
@@ -92,10 +93,10 @@ def checkDataFile():
 
 
 def determineCache(args):
-    startTime=args.get('startTime')
-    endTime=args.get('endTime')
-    category=args.get('category')
-    summary=args.get('summary')
+    startTime = args.get('startTime')
+    endTime = args.get('endTime')
+    category = args.get('category')
+    summary = args.get('summary')
 
     if not (startTime and endTime):
         if endTime:
@@ -106,13 +107,28 @@ def determineCache(args):
             registerNextCacheTime(getNextCacheTime(getNowTime()))
 
 
+def timeLengthConstructor(startTime, endTime):
+    sTimeDT = datetime.fromisoformat(startTime)
+    eTimeDT = datetime.fromisoformat(endTime)
+    delt = eTimeDT-sTimeDT
+    seconds = delt.total_seconds()
 
-def eventContrustor(args):
-    startTime=args.get('startTime')
-    endTime=args.get('endTime')
-    category=args.get('category')
-    summary=args.get('summary')
-    
+    deltaStr = str(delt)
+
+    if seconds < 3600:
+        deltaStr = deltaStr[2:4]+'m'
+    elif seconds < 86400:
+        deltaStr = deltaStr[0:4]+'m'
+
+    return deltaStr
+
+
+def eventContructor(args):
+    startTime = args.get('startTime')
+    endTime = args.get('endTime')
+    category = args.get('category')
+    summary = args.get('summary')
+
     event = {}
 
     if not startTime:
@@ -121,14 +137,15 @@ def eventContrustor(args):
         with open(dataFilePath, 'r') as openfile:
             # Reading from json file
             json_object = json.load(openfile)
-            startTime=json_object['cachedTime']
-    
+            startTime = json_object['cachedTime']
+
     if not endTime:
         # Opening JSON file
-        endTime=getNowTime()
+        endTime = getNowTime()
 
+    deltaStr = timeLengthConstructor(startTime, endTime)
 
-    event['summary'] = summary
+    event['summary'] = "{} [{}]".format(summary, deltaStr)
 
     event['start'] = {
         'dateTime': startTime,
@@ -146,16 +163,16 @@ def eventContrustor(args):
 def main():
     checkDataFile()
     print(sys.argv)
-    args=parseArgs(sys.argv[1:len(sys.argv)])
-    
-    event=eventContrustor(args)
+    args = parseArgs(sys.argv[1:len(sys.argv)])
+
+    event = eventContructor(args)
     determineCache(args)
     """Shows basic usage of the Google Calendar API.
     Prints the start and name of the next 10 events on the user's calendar.
     """
-    
+
     print(event)
-    
+
     creds = None
     # The file token.pickle stores the user's access and refresh tokens, and is
     # created automatically when the authorization flow completes for the first
@@ -192,7 +209,8 @@ def main():
 
                 id = calendar_list_entry['id']
 
-                service.events().insert(calendarId=id, body=event).execute() #used to be event=.... ??
+                # used to be event=.... ??
+                service.events().insert(calendarId=id, body=event).execute()
 
         page_token = calendar_list.get('nextPageToken')
 
@@ -202,6 +220,8 @@ def main():
 
 if __name__ == '__main__':
     main()
+    # pass
 
 # print(parseArgs("start-XXXX end-XXXXX title-XXXX descripion-XXXXX"))
-print(getNextCacheTime("2022-12-08T12:39:21"))
+# print(getNextCacheTime("2022-12-08T12:39:21"))
+# print(timeLengthConstructor("2022-12-08T12:39:21", "2022-12-08T13:50:21"))
